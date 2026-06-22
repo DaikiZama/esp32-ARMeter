@@ -207,47 +207,117 @@
         let res2Visible = this.m2 && this.m2.object3D.visible;
         let led2Visible = this.m3 && this.m3.object3D.visible;
 
-        let isSeries =
-          this.m6.object3D.visible &&
-          this.m0.object3D.visible &&
-          this.m1.object3D.visible &&
-          !res2Visible &&
-          !led2Visible;
 
-        let isParallel =
-          this.m6.object3D.visible &&
-          this.m0.object3D.visible &&
-          this.m1.object3D.visible &&
-          res2Visible &&
-          led2Visible;
+        let mode = 0;
+
+        // 直列
+        if (!res2Visible && !led2Visible) {
+            mode = 1;
+        }
+
+        // 抵抗並列
+        else if (res2Visible && !led2Visible) {
+            mode = 2;
+        }
+
+        // 2枝並列
+        else if (res2Visible && led2Visible) {
+            mode = 3;
+        }
+
+
+        // let isSeries =
+        //   this.m6.object3D.visible &&
+        //   this.m0.object3D.visible &&
+        //   this.m1.object3D.visible &&
+        //   !res2Visible &&
+        //   !led2Visible;
+
+        // let isParallel =
+        //   this.m6.object3D.visible &&
+        //   this.m0.object3D.visible &&
+        //   this.m1.object3D.visible &&
+        //   res2Visible &&
+        //   led2Visible;
 
 
 
         //追加 各区間のジオメトリ更新実行
-        if (isSeries) {
+
+        if(mode === 1){
 
           this.updateSegment(0, p6, p0, densityRatio);
           this.updateSegment(1, p0, p1, densityRatio);
           this.updateSegment(2, p1, p6, densityRatio);
 
-          this.updateSegment(3, p6, p6, 0);
-          this.updateSegment(4, p6, p6, 0);
-          this.updateSegment(5, p6, p6, 0);
-
+          for(let i=3;i<6;i++){
+              this.updateSegment(i, p6, p6, 0);
+            }
         }
-        else if (isParallel) {
+
+        if(mode === 2){
 
           let branchDensity = densityRatio / 2;
 
+          // 枝1
+          this.updateSegment(0, p6, p0, branchDensity);
+
+          // 枝2
+          this.updateSegment(1, p6, p2, branchDensity);
+
+          // LEDへ合流
+          this.updateSegment(2, p0, p1, branchDensity);
+          this.updateSegment(3, p2, p1, branchDensity);
+
+          // 戻り
+          this.updateSegment(4, p1, p6, densityRatio);
+
+          this.updateSegment(5, p6, p6, 0);
+        }
+
+        if(mode === 3){
+
+          let branchDensity = densityRatio / 2;
+
+          // 上枝
           this.updateSegment(0, p6, p0, branchDensity);
           this.updateSegment(1, p0, p1, branchDensity);
 
+          // 下枝
           this.updateSegment(2, p6, p2, branchDensity);
           this.updateSegment(3, p2, p3, branchDensity);
 
+          // 戻り
           this.updateSegment(4, p1, p6, branchDensity);
           this.updateSegment(5, p3, p6, branchDensity);
         }
+
+
+
+        // if (isSeries) {
+
+        //   this.updateSegment(0, p6, p0, densityRatio);
+        //   this.updateSegment(1, p0, p1, densityRatio);
+        //   this.updateSegment(2, p1, p6, densityRatio);
+
+        //   this.updateSegment(3, p6, p6, 0);
+        //   this.updateSegment(4, p6, p6, 0);
+        //   this.updateSegment(5, p6, p6, 0);
+
+        // }
+        // else if (isParallel) {
+
+        //   let branchDensity = densityRatio / 2;
+
+        //   this.updateSegment(0, p6, p0, branchDensity);
+        //   this.updateSegment(1, p0, p1, branchDensity);
+
+        //   this.updateSegment(2, p6, p2, branchDensity);
+        //   this.updateSegment(3, p2, p3, branchDensity);
+
+        //   this.updateSegment(4, p1, p6, branchDensity);
+        //   this.updateSegment(5, p3, p6, branchDensity);
+        // }
 
 
         // 各区間のジオメトリ更新実行
