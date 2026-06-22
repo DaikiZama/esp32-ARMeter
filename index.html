@@ -115,7 +115,7 @@
         const MAX_PARTICLES = 30;
 
         // 3つの区間 (Battery->Resistor, Resistor->LED, LED->Battery) のオブジェクトを生成
-        for (let i = 0; i < 3; i++) {
+        for (let i = 0; i < 6; i++) {
           // 1. 導線 (Cylinder) の生成
           let wire = document.createElement('a-cylinder');
           wire.setAttribute('color', '#555555'); // 初期色はグレー(未通電状態)
@@ -149,6 +149,9 @@
         this.m6 = document.querySelector('#marker-batt');
         this.m0 = document.querySelector('#marker-res');
         this.m1 = document.querySelector('#marker-led');
+        //追加
+        this.m2 = document.querySelector('#marker-res2');
+        this.m3 = document.querySelector('#marker-led2');
       },
 
       // フレーム更新処理 (毎フレーム実行されるレンダーループ)
@@ -165,6 +168,10 @@
         let p6 = new THREE.Vector3(); this.m6.object3D.getWorldPosition(p6); p6.y += 0.02;
         let p0 = new THREE.Vector3(); this.m0.object3D.getWorldPosition(p0); p0.y += 0.02;
         let p1 = new THREE.Vector3(); this.m1.object3D.getWorldPosition(p1); p1.y += 0.02;
+        //追加
+        let p2 = new THREE.Vector3(); this.m2.object3D.getWorldPosition(p2); p2.y += 0.02;
+        let p3 = new THREE.Vector3(); this.m3.object3D.getWorldPosition(p3); p3.y += 0.02;
+
 
         // アニメーション時間を進行 (一定速度)
         this.timeOffset += 0.003; 
@@ -196,10 +203,60 @@
             densityRatio = 0; // 粒子を表示しない
         }
 
+      //追加
+        let res2Visible = this.m2 && this.m2.object3D.visible;
+        let led2Visible = this.m3 && this.m3.object3D.visible;
+
+        let isSeries =
+          this.m6.object3D.visible &&
+          this.m0.object3D.visible &&
+          this.m1.object3D.visible &&
+          !res2Visible &&
+          !led2Visible;
+
+        let isParallel =
+          this.m6.object3D.visible &&
+          this.m0.object3D.visible &&
+          this.m1.object3D.visible &&
+          res2Visible &&
+          led2Visible;
+
+
+
+        //追加 各区間のジオメトリ更新実行
+        if (isSeries) {
+
+          this.updateSegment(0, p6, p0, densityRatio);
+          this.updateSegment(1, p0, p1, densityRatio);
+          this.updateSegment(2, p1, p6, densityRatio);
+
+          this.updateSegment(3, p6, p6, 0);
+          this.updateSegment(4, p6, p6, 0);
+          this.updateSegment(5, p6, p6, 0);
+
+        }
+        else if (isParallel) {
+
+          let branchDensity = densityRatio / 2;
+
+          this.updateSegment(0, p6, p0, branchDensity);
+          this.updateSegment(1, p0, p1, branchDensity);
+
+          this.updateSegment(2, p6, p2, branchDensity);
+          this.updateSegment(3, p2, p3, branchDensity);
+
+          this.updateSegment(4, p1, p6, branchDensity);
+          this.updateSegment(5, p3, p6, branchDensity);
+        }
+
+
         // 各区間のジオメトリ更新実行
-        this.updateSegment(0, p6, p0, densityRatio);
-        this.updateSegment(1, p0, p1, densityRatio);
-        this.updateSegment(2, p1, p6, densityRatio);
+        // this.updateSegment(0, p6, p0, densityRatio);
+        // this.updateSegment(1, p0, p1, densityRatio);
+        // this.updateSegment(2, p1, p6, densityRatio);
+
+        // this.updateSegment(3, p6, p6, 0);
+        // this.updateSegment(4, p6, p6, 0);
       },
 
       // 2点間(start-end)の導線と粒子を配置・更新するヘルパー関数
@@ -252,6 +309,9 @@
   <canvas id="cv-batt" class="symbol-canvas" width="256" height="256"></canvas>
   <canvas id="cv-res" class="symbol-canvas" width="256" height="256"></canvas>
   <canvas id="cv-led" class="symbol-canvas" width="256" height="256"></canvas>
+  //追加
+  <canvas id="cv-res2" class="symbol-canvas" width="256" height="256"></canvas>
+  <canvas id="cv-led2" class="symbol-canvas" width="256" height="256"></canvas>
 
 
   <a-scene embedded arjs='sourceType: webcam; detectionMode: mono_and_matrix; matrixCodeType: 3x3; debugUIEnabled: false;' circuit-animator canvas-updater>
@@ -260,6 +320,9 @@
       <canvas id="cv-batt-asset" src="#cv-batt"></canvas>
       <canvas id="cv-res-asset" src="#cv-res"></canvas>
       <canvas id="cv-led-asset" src="#cv-led"></canvas>
+      //追加
+      <canvas id="cv-res2-asset" src="#cv-res2"></canvas>
+      <canvas id="cv-led2-asset" src="#cv-led2"></canvas>
     </a-assets>
 
     <a-marker id="marker-batt" type='barcode' value='6'>
@@ -283,6 +346,28 @@
          <a-text id="voltText" value="--- V" color="#FF3B30" position="0 0.02 0.3" rotation="-90 0 0" align="center" scale="3 3 3"></a-text>
        </a-entity>
     </a-marker>
+
+
+  // 追加
+    <a-marker id="marker-res2" type="barcode" value="2">
+      <a-entity id="resistorInfo2">
+         <a-plane position="0 0.1 -0.5" rotation="-90 0 0" width="1" height="1" material="src: #cv-res2; transparent:true; opacity: 1;"></a-plane>
+         
+         <a-text id="currText2" value="--- mA" color="yellow" position="0 0.02 0.2" rotation="-90 0 0" align="center" scale="3 3 3"></a-text>
+         <a-text id="resText2" value="R: ---" color="#00FF00" position="0 0.02 0.7" rotation="-90 0 0" align="center" scale="2.5 2.5 2.5"></a-text>
+       </a-entity>
+    </a-marker>
+
+
+    <a-marker id="marker-led2" type='barcode' value='3'>
+      <a-entity id="ledInfo">
+         <a-plane position="0 0.1 -0.5" rotation="-90 0 0" width="1" height="1" material="src: #cv-led; transparent:true; opacity: 1;"></a-plane>
+         <a-text id="voltText" value="--- V" color="#FF3B30" position="0 0.02 0.3" rotation="-90 0 0" align="center" scale="3 3 3"></a-text>
+      </a-entity>
+    </a-marker>
+
+
+
 
     <a-entity camera></a-entity>
   </a-scene>
@@ -341,6 +426,14 @@
       ctx.fillStyle = 'black'; ctx.font = 'bold 35px Arial'; ctx.textAlign = 'center';
       ctx.fillText("Var. Resistor", 128, 40);
 
+      //追加
+      c = document.getElementById('cv-res2');
+      ctx = c.getContext('2d');
+
+      ctx.drawImage(document.getElementById('cv-res'), 0, 0);
+
+
+      
       // 3. LED (発光ダイオード)
       c = document.getElementById('cv-led'); ctx = c.getContext('2d');
       ctx.fillStyle = 'white'; ctx.fillRect(0,0,256,256);
@@ -356,6 +449,15 @@
       ctx.moveTo(220, 160); ctx.lineTo(230, 160); ctx.lineTo(230, 150); ctx.stroke();
       ctx.fillStyle = 'black'; ctx.font = 'bold 40px Arial'; ctx.textAlign = 'center';
       ctx.fillText("LED", 128, 40);
+
+      //追加
+      c = document.getElementById('cv-led2');
+      ctx = c.getContext('2d');
+
+      ctx.drawImage(document.getElementById('cv-led'), 0, 0);
+
+
+
     }
 
     // --- ボタンイベントハンドラ ---
