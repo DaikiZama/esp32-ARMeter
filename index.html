@@ -83,7 +83,7 @@
       init: function() {
         this.el.sceneEl.addEventListener('loaded', () => {
           // シーン読み込み完了時に、各テクスチャの更新フラグを立てる
-          const maps = ['#cv-batt', '#cv-res', '#cv-led'];
+          const maps = ['#cv-batt', '#cv-res', '#cv-led','#cv-res2','#cv-led2'];
           maps.forEach(id => {
             const el = document.querySelector(id);
             if(el) el.needsUpdate = true;
@@ -208,6 +208,7 @@
         let led2Visible = this.m3 && this.m3.object3D.visible;
 
 
+        //何のために分けているのか、なるべく分けない方がいい。なぜそのプログラムなのか理解する。
         let mode = 0;
 
         // 直列
@@ -430,9 +431,9 @@
 
 
     <a-marker id="marker-led2" type='barcode' value='3'>
-      <a-entity id="ledInfo">
+      <a-entity id="ledInfo2">
          <a-plane position="0 0.1 -0.5" rotation="-90 0 0" width="1" height="1" material="src: #cv-led; transparent:true; opacity: 1;"></a-plane>
-         <a-text id="voltText" value="--- V" color="#FF3B30" position="0 0.02 0.3" rotation="-90 0 0" align="center" scale="3 3 3"></a-text>
+         <a-text id="voltText2" value="--- V" color="#FF3B30" position="0 0.02 0.3" rotation="-90 0 0" align="center" scale="3 3 3"></a-text>
       </a-entity>
     </a-marker>
 
@@ -611,7 +612,12 @@
         // 数値表示の更新 (単位変換: A -> mA)
         let current_mA = (rawCurrent * 1000).toFixed(3); 
         document.querySelectorAll('#voltText').forEach(el => el.setAttribute('value', rawVoltage + " V"));
+        //追加
+        document.querySelectorAll('#voltText2').forEach(el => el.setAttribute('value', rawVoltage + " V"));
+        
         document.querySelectorAll('#currText').forEach(el => el.setAttribute('value', current_mA + " mA"));
+        //追加
+         document.querySelectorAll('#currText2').forEach(el => el.setAttribute('value', current_mA + " mA"));
         
         // [オームの法則による抵抗値推定] R = V / I
         // ゼロ除算および異常値表示を防ぐため，有意な電流(1uA以上)が流れている場合のみ計算を行う．
@@ -628,6 +634,8 @@
             resistanceText = "MAX"; // 開放状態（電流なし）
         }
         document.querySelectorAll('#resText').forEach(el => el.setAttribute('value', "R: " + resistanceText));
+        //追加
+        document.querySelectorAll('#resText2').forEach(el => el.setAttribute('value', "R: " + resistanceText));
 
         // グラフ用データ履歴の更新
         dataHistory.push({ v: rawVoltage, c: rawCurrent });
