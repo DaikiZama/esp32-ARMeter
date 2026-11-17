@@ -70,9 +70,12 @@
       の間で，最新のセンサー値を共有するための状態変数．
       ================================================================================
     */
-    window.currentValueGlobal = 0.0; // 現在の電流値 (単位: A)
-    window.voltageValueGlobal = 0.0; // 現在の電圧値 (単位: V)
-    window.showFlowGlobal = true;    // 回路図・粒子アニメーションの表示フラグ
+    // INA219①・②の測定値を、BLE受信処理とAR描画処理で共有する
+    window.currentValueGlobal = 0.0;  // INA219①の電流 (A)
+    window.voltageValueGlobal = 0.0;  // INA219①の電圧 (V)
+    window.currentValue2Global = 0.0; // INA219②の電流 (A)
+    window.voltageValue2Global = 0.0; // INA219②の電圧 (V)
+    window.showFlowGlobal = true;     // 回路図・粒子アニメーションの表示フラグ
 
     /* [A-Frame カスタムコンポーネント: canvas-updater]
       役割: Canvas APIで描画した回路記号を，3Dオブジェクトのテクスチャとして反映させる．
@@ -176,31 +179,28 @@
         // アニメーション時間を進行 (一定速度)
         this.timeOffset += 0.003; 
 
-        // センサーデータの取得
-        let I = window.currentValueGlobal; // 電流(A)
-        let V = window.voltageValueGlobal; // 電圧(V)
+        // INA219①・②のセンサーデータを取得
+        let I1 = window.currentValueGlobal;  // INA219①の電流 (A)
+        let V1 = window.voltageValueGlobal;  // INA219①の電圧 (V)
+        let I2 = window.currentValue2Global; // INA219②の電流 (A)
+        let V2 = window.voltageValue2Global; // INA219②の電圧 (V)
 
-        /* [ロジック1: 回路接続判定 (Voltage-Based Connection Logic)]
-           INA219センサーの特性上，抵抗値が極大の場合，回路が接続されていても電流はほぼ0となる．
-           これを「断線」と区別するため，1.0V以上の電圧が検知されていれば
-           「回路は物理的に接続されている」と判定し，導線を緑色にする．
-        */
-        let wireColor = (V > 1.0) ? '#00FF00' : '#888888';
+        // 電圧が検知されている場合は導線を緑色にする
+        // 既存の基本表示は維持し、全体の導線色はINA219①の電圧を基準にする
+        let wireColor = (V1 > 1.0) ? '#00FF00' : '#888888';
         this.wires.forEach(w => w.setAttribute('color', wireColor));
 
-        /* [ロジック2: 電流密度計算 (Proportional Density Logic)]
-           電流の強さを，表示する粒子の「密度（数）」で表現する．
-           基準値: 20mA (0.02A) を密度100%とする．
-        */
-        let maxCurrentRef = 0.02; 
-        let densityRatio = 0;
+        // 電流値を粒子密度へ変換する（20mAで密度100%）
+        let maxCurrentRef = 0.02;
+        let densityRatio1 = 0;
+        let densityRatio2 = 0;
 
-        // ノイズ対策: 0.1mA (0.0001A) 未満の微小電流は「流れなし」とみなす
-        if (I > 0.0001) {
-            densityRatio = I / maxCurrentRef;
-            if (densityRatio > 1.0) densityRatio = 1.0; // 100%を超えないようクリップ
-        } else {
-            densityRatio = 0; // 粒子を表示しない
+        // 0.1mA未満の微小電流は、粒子を表示しない
+        if (I1 > 0.0001) {
+            densityRatio1 = Math.min(I1 / maxCurrentRef, 1.0);
+        }
+        if (I2 > 0.0001) {
+            densityRatio2 = Math.min(I2 / maxCurrentRef, 1.0);
         }
 
       //追加
@@ -247,9 +247,9 @@
 
         if(mode === 1){
 
-          this.updateSegment(0, p6, p0, densityRatio);
-          this.updateSegment(1, p0, p1, densityRatio);
-          this.updateSegment(2, p1, p6, densityRatio);
+          this.updateSegment(0, p6, p0, densityRatio1);
+          this.updateSegment(1, p0, p1, densityRatio1);
+          this.updateSegment(2, p1, p6, densityRatio1);
 
           for(let i=3;i<6;i++){
               this.updateSegment(i, p6, p6, 0);
@@ -258,39 +258,33 @@
 
         if(mode === 2){
 
-          let branchDensity = densityRatio / 2;
+          // 枝1はINA219①、枝2はINA219②の電流値を使用
+          this.updateSegment(0, p6, p0, densityRatio1);
+          this.updateSegment(1, p6, p2, densityRatio2);
 
-          // 枝1
-          this.updateSegment(0, p6, p0, branchDensity);
+          // 各枝からLED側へ接続
+          this.updateSegment(2, p0, p1, densityRatio1);
+          this.updateSegment(3, p2, p1, densityRatio2);
 
-          // 枝2
-          this.updateSegment(1, p6, p2, branchDensity);
-
-          // LEDへ合流
-          this.updateSegment(2, p0, p1, branchDensity);
-          this.updateSegment(3, p2, p1, branchDensity);
-
-          // 戻り
-          this.updateSegment(4, p1, p6, densityRatio);
+          // 戻り側は両枝の電流を合算した密度で表示
+          let returnDensity = Math.min(densityRatio1 + densityRatio2, 1.0);
+          this.updateSegment(4, p1, p6, returnDensity);
 
           this.updateSegment(5, p6, p6, 0);
         }
 
         if(mode === 3){
 
-          let branchDensity = densityRatio / 2;
+          // 上枝はINA219①、下枝はINA219②の電流値を使用
+          this.updateSegment(0, p6, p0, densityRatio1);
+          this.updateSegment(1, p0, p1, densityRatio1);
 
-          // 上枝
-          this.updateSegment(0, p6, p0, branchDensity);
-          this.updateSegment(1, p0, p1, branchDensity);
+          this.updateSegment(2, p6, p2, densityRatio2);
+          this.updateSegment(3, p2, p3, densityRatio2);
 
-          // 下枝
-          this.updateSegment(2, p6, p2, branchDensity);
-          this.updateSegment(3, p2, p3, branchDensity);
-
-          // 戻り
-          this.updateSegment(4, p1, p6, branchDensity);
-          this.updateSegment(5, p3, p6, branchDensity);
+          // それぞれの枝の戻りも各センサー値に対応
+          this.updateSegment(4, p1, p6, densityRatio1);
+          this.updateSegment(5, p3, p6, densityRatio2);
         }
 
 
@@ -374,13 +368,13 @@
   <div id="hud">
     <div id="status">Status: <span id="statusText" class="status-ng">Disconnected</span></div>
     <canvas id="graphCanvas" width="300" height="150"></canvas>
-    <div style="font-size:10px; color:#ccc; margin-top:2px;">Red: Voltage / Blue: Current</div>
+    <div style="font-size:10px; color:#ccc; margin-top:2px;">INA219① 赤:電圧 青:電流 / INA219② 橙:電圧 水色:電流</div>
   </div>
 
   <canvas id="cv-batt" class="symbol-canvas" width="256" height="256"></canvas>
   <canvas id="cv-res" class="symbol-canvas" width="256" height="256"></canvas>
   <canvas id="cv-led" class="symbol-canvas" width="256" height="256"></canvas>
-  //追加
+  <!-- 追加 -->
   <canvas id="cv-res2" class="symbol-canvas" width="256" height="256"></canvas>
   <canvas id="cv-led2" class="symbol-canvas" width="256" height="256"></canvas>
 
@@ -391,7 +385,7 @@
       <canvas id="cv-batt-asset" src="#cv-batt"></canvas>
       <canvas id="cv-res-asset" src="#cv-res"></canvas>
       <canvas id="cv-led-asset" src="#cv-led"></canvas>
-      //追加
+      <!-- 追加 -->
       <canvas id="cv-res2-asset" src="#cv-res2"></canvas>
       <canvas id="cv-led2-asset" src="#cv-led2"></canvas>
     </a-assets>
@@ -419,12 +413,13 @@
     </a-marker>
 
 
-  // 追加
+    <!-- 追加 -->
     <a-marker id="marker-res2" type="barcode" value="2">
       <a-entity id="resistorInfo2">
          <a-plane position="0 0.1 -0.5" rotation="-90 0 0" width="1" height="1" material="src: #cv-res2; transparent:true; opacity: 1;"></a-plane>
          
          <a-text id="currText2" value="--- mA" color="yellow" position="0 0.02 0.2" rotation="-90 0 0" align="center" scale="3 3 3"></a-text>
+         <a-text id="voltText2" value="--- V" color="#FF3B30" position="0 0.02 -0.2" rotation="-90 0 0" align="center" scale="3 3 3"></a-text>
          <a-text id="resText2" value="R: ---" color="#00FF00" position="0 0.02 0.7" rotation="-90 0 0" align="center" scale="2.5 2.5 2.5"></a-text>
        </a-entity>
     </a-marker>
@@ -433,7 +428,6 @@
     <a-marker id="marker-led2" type='barcode' value='3'>
       <a-entity id="ledInfo2">
          <a-plane position="0 0.1 -0.5" rotation="-90 0 0" width="1" height="1" material="src: #cv-led; transparent:true; opacity: 1;"></a-plane>
-         <a-text id="voltText2" value="--- V" color="#FF3B30" position="0 0.02 0.3" rotation="-90 0 0" align="center" scale="3 3 3"></a-text>
       </a-entity>
     </a-marker>
 
@@ -449,7 +443,7 @@
     const targetUuid  = "BEB5483E-36E1-4688-B7F5-EA07361B26A8";
     
     let myBLE, myCharacteristic;
-    let dataHistory = []; 
+    let dataHistory = [];
     const maxDataPoints = 100; // グラフの描画データ保持数
     let showInfo = true;
 
@@ -595,96 +589,115 @@
     }
 
     /* [データ受信ハンドラ]
-      役割: センサー値のパース，ノイズフィルタリング，単位変換，表示更新
-      受信形式: "電圧(V),電流(A)"
+      役割: 2個のINA219の測定値を解析し、AR表示・数値表示・グラフを更新する
+      受信形式: "電圧1(V),電流1(A),電圧2(V),電流2(A)"
     */
     function handleData(error, data) {
       if (error || !data) return;
-      let values = String(data).split(',');
-      if (values.length >= 2) {
-        let rawVoltage = parseFloat(values[0]);
-        let rawCurrent = parseFloat(values[1]);
-        
-        // [ノイズフィルタリング]
-        // センサーのゼロ点ドリフト等により負の値が観測された場合，0.0に補正する。
-        if (rawCurrent < 0) rawCurrent = 0.0;
-        
-        // グローバル変数へ反映 (ARアニメーション用)
-        window.currentValueGlobal = rawCurrent;
-        window.voltageValueGlobal = rawVoltage;
 
-        // 数値表示の更新 (単位変換: A -> mA)
-        let current_mA = (rawCurrent * 1000).toFixed(3); 
-        document.querySelectorAll('#voltText').forEach(el => el.setAttribute('value', rawVoltage + " V"));
-        //追加
-        document.querySelectorAll('#voltText2').forEach(el => el.setAttribute('value', rawVoltage + " V"));
-        
-        document.querySelectorAll('#currText').forEach(el => el.setAttribute('value', current_mA + " mA"));
-        //追加
-         document.querySelectorAll('#currText2').forEach(el => el.setAttribute('value', current_mA + " mA"));
-        
-        // [オームの法則による抵抗値推定] R = V / I
-        // ゼロ除算および異常値表示を防ぐため，有意な電流(1uA以上)が流れている場合のみ計算を行う．
-        let resistanceText = "---";
-        if (rawCurrent > 0.000001) { 
-            let R = rawVoltage / rawCurrent;
-            // 視認性向上のため、1000Ω以上はkΩ単位で表示
-            if (R >= 1000) { 
-                resistanceText = (R / 1000).toFixed(2) + " k-ohm"; 
-            } else { 
-                resistanceText = R.toFixed(0) + " ohm"; 
-            }
-        } else { 
-            resistanceText = "MAX"; // 開放状態（電流なし）
-        }
-        document.querySelectorAll('#resText').forEach(el => el.setAttribute('value', "R: " + resistanceText));
-        //追加
-        document.querySelectorAll('#resText2').forEach(el => el.setAttribute('value', "R: " + resistanceText));
-
-        // グラフ用データ履歴の更新
-        dataHistory.push({ v: rawVoltage, c: rawCurrent });
-        if (dataHistory.length > maxDataPoints) dataHistory.shift();
-        drawGraph();
+      const values = String(data).trim().split(',');
+      // 4つの値がそろっている場合のみ処理する
+      if (values.length < 4) {
+        console.warn("INA219のデータが4項目ではありません:", data);
+        return;
       }
+
+      let rawVoltage1 = parseFloat(values[0]);
+      let rawCurrent1 = parseFloat(values[1]);
+      let rawVoltage2 = parseFloat(values[2]);
+      let rawCurrent2 = parseFloat(values[3]);
+
+      // 数値でないデータは処理しない
+      if (![rawVoltage1, rawCurrent1, rawVoltage2, rawCurrent2].every(Number.isFinite)) return;
+
+      // 電流の負のノイズ値を0に補正
+      if (rawCurrent1 < 0) rawCurrent1 = 0.0;
+      if (rawCurrent2 < 0) rawCurrent2 = 0.0;
+
+      // ARアニメーション用グローバル変数を更新
+      window.voltageValueGlobal = rawVoltage1;
+      window.currentValueGlobal = rawCurrent1;
+      window.voltageValue2Global = rawVoltage2;
+      window.currentValue2Global = rawCurrent2;
+
+      // INA219①の表示（抵抗1・LED1）
+      const current1_mA = (rawCurrent1 * 1000).toFixed(3);
+      document.querySelectorAll('#voltText').forEach(el => el.setAttribute('value', rawVoltage1.toFixed(3) + " V"));
+      document.querySelectorAll('#currText').forEach(el => el.setAttribute('value', current1_mA + " mA"));
+
+      let resistanceText1 = "MAX";
+      if (rawCurrent1 > 0.000001) {
+        const R1 = rawVoltage1 / rawCurrent1;
+        resistanceText1 = R1 >= 1000 ? (R1 / 1000).toFixed(2) + " k-ohm" : R1.toFixed(0) + " ohm";
+      }
+      document.querySelectorAll('#resText').forEach(el => el.setAttribute('value', "R: " + resistanceText1));
+
+      // INA219②の表示（抵抗2・LED2）
+      const current2_mA = (rawCurrent2 * 1000).toFixed(3);
+      document.querySelectorAll('#voltText2').forEach(el => el.setAttribute('value', rawVoltage2.toFixed(3) + " V"));
+      document.querySelectorAll('#currText2').forEach(el => el.setAttribute('value', current2_mA + " mA"));
+
+      let resistanceText2 = "MAX";
+      if (rawCurrent2 > 0.000001) {
+        const R2 = rawVoltage2 / rawCurrent2;
+        resistanceText2 = R2 >= 1000 ? (R2 / 1000).toFixed(2) + " k-ohm" : R2.toFixed(0) + " ohm";
+      }
+      document.querySelectorAll('#resText2').forEach(el => el.setAttribute('value', "R: " + resistanceText2));
+
+      // 2個のセンサー値をグラフ履歴に追加
+      dataHistory.push({ v1: rawVoltage1, c1: rawCurrent1, v2: rawVoltage2, c2: rawCurrent2 });
+      if (dataHistory.length > maxDataPoints) dataHistory.shift();
+      drawGraph();
     }
 
-    // [グラフ描画関数] HUD内のCanvasに時系列データを描画
+    // [グラフ描画関数] 2個のINA219の電圧・電流を時系列で表示
     function drawGraph() {
       const canvas = document.getElementById('graphCanvas');
       const ctx = canvas.getContext('2d');
-      const w = canvas.width; const h = canvas.height;
+      const w = canvas.width;
+      const h = canvas.height;
       ctx.clearRect(0, 0, w, h);
-      
-      // グリッド線描画
-      ctx.strokeStyle = '#555'; ctx.lineWidth = 1; ctx.beginPath();
-      for(let i=1; i<4; i++) { let y = (h / 4) * i; ctx.moveTo(0, y); ctx.lineTo(w, y); }
+
+      // グリッド線
+      ctx.strokeStyle = '#555';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let i = 1; i < 4; i++) {
+        const y = (h / 4) * i;
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+      }
       ctx.stroke();
 
       if (dataHistory.length < 2) return;
-      
-      const maxVolt = 3.5;  // グラフY軸最大値(電圧)
-      const maxCurr = 0.02; // グラフY軸最大値(電流 20mA)
 
-      // 電圧グラフ (赤色)
-      ctx.beginPath(); ctx.strokeStyle = '#FF3B30'; ctx.lineWidth = 2;
-      for (let i = 0; i < dataHistory.length; i++) {
-        let x = (i / (maxDataPoints - 1)) * w; 
-        let y = h - (dataHistory[i].v / maxVolt) * h;
-        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-      }
-      ctx.stroke();
+      const maxVolt = 3.5;  // 電圧グラフの最大値(V)
+      const maxCurr = 0.02; // 電流グラフの最大値(A)
 
-      // 電流グラフ (青色)
-      ctx.beginPath(); ctx.strokeStyle = '#007AFF'; ctx.lineWidth = 2;
-      for (let i = 0; i < dataHistory.length; i++) {
-        let x = (i / (maxDataPoints - 1)) * w;
-        let val = dataHistory[i].c; 
-        if (val > maxCurr) val = maxCurr; // クランプ処理
-        let y = h - (val / maxCurr) * h;
-        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      // 指定されたデータ項目を折れ線グラフとして描画
+      function drawLine(key, maxValue, color) {
+        ctx.beginPath();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        dataHistory.forEach((point, i) => {
+          const x = (i / (maxDataPoints - 1)) * w;
+          const value = Math.max(0, Math.min(point[key], maxValue));
+          const y = h - (value / maxValue) * h;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
       }
-      ctx.stroke();
+
+      // INA219①：電圧=赤、電流=青
+      drawLine('v1', maxVolt, '#FF3B30');
+      drawLine('c1', maxCurr, '#007AFF');
+
+      // INA219②：電圧=橙、電流=水色
+      drawLine('v2', maxVolt, '#FF9500');
+      drawLine('c2', maxCurr, '#32ADE6');
     }
+
   </script>
 </body>
 </html>
