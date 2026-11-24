@@ -419,7 +419,7 @@
          <a-plane position="0 0.1 -0.5" rotation="-90 0 0" width="1" height="1" material="src: #cv-res2; transparent:true; opacity: 1;"></a-plane>
          
          <a-text id="currText2" value="--- mA" color="yellow" position="0 0.02 0.2" rotation="-90 0 0" align="center" scale="3 3 3"></a-text>
-         <a-text id="voltText2" value="--- V" color="#FF3B30" position="0 0.02 -0.2" rotation="-90 0 0" align="center" scale="3 3 3"></a-text>
+         <!--<a-text id="voltText2" value="--- V" color="#FF3B30" position="0 0.02 -0.2" rotation="-90 0 0" align="center" scale="3 3 3"></a-text>-->
          <a-text id="resText2" value="R: ---" color="#00FF00" position="0 0.02 0.7" rotation="-90 0 0" align="center" scale="2.5 2.5 2.5"></a-text>
        </a-entity>
     </a-marker>
@@ -622,7 +622,7 @@
 
       // INA219①の表示（抵抗1・LED1）
       const current1_mA = (rawCurrent1 * 1000).toFixed(3);
-      document.querySelectorAll('#voltText').forEach(el => el.setAttribute('value', rawVoltage1.toFixed(3) + " V"));
+      //document.querySelectorAll('#voltText').forEach(el => el.setAttribute('value', rawVoltage1.toFixed(3) + " V"));
       document.querySelectorAll('#currText').forEach(el => el.setAttribute('value', current1_mA + " mA"));
 
       let resistanceText1 = "MAX";
