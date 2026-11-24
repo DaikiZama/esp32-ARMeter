@@ -634,7 +634,7 @@
 
       // INA219②の表示（抵抗2・LED2）
       const current2_mA = (rawCurrent2 * 1000).toFixed(3);
-      document.querySelectorAll('#voltText2').forEach(el => el.setAttribute('value', rawVoltage2.toFixed(3) + " V"));
+      //document.querySelectorAll('#voltText2').forEach(el => el.setAttribute('value', rawVoltage2.toFixed(3) + " V"));
       document.querySelectorAll('#currText2').forEach(el => el.setAttribute('value', current2_mA + " mA"));
 
       let resistanceText2 = "MAX";
